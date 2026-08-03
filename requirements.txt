@@ -1,0 +1,8 @@
+apache-airflow==3.3.0
+apache-airflow-providers-postgres
+pandas
+sqlalchemy
+psycopg2-binary
+kaggle
+python-dotenv
+pytest
