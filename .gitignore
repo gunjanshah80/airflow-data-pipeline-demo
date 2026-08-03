@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environment
+airflow-env/
+venv/
+.venv/
+
+# Environment and secrets
+.env
+.env.*
+kaggle.json
+*.pem
+*.key
+
+# Airflow local files
+airflow.db
+airflow.cfg
+logs/
+*.pid
+
+# Downloaded and generated data
+data/downloads/*
+data/raw/*
+data/processed/*
+data/summary/*
+
+# Keep empty data folders in Git
+!data/downloads/.gitkeep
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/summary/.gitkeep
+
+# PostgreSQL local files and backups
+*.sql.gz
+*.dump
+*.backup
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Build and package files
+build/
+dist/
+*.egg-info/
+
+# Temporary files
+*.tmp
+*.temp

@@ -491,7 +491,7 @@ SELECT
     passenger_class,
     COUNT(*) AS passengers,
     ROUND(AVG(survived) * 100, 2) AS survival_percentage
-FROM pipeline.titanic_passengers
+FROM airflow_pipeline_demo.titanic_passengers
 GROUP BY passenger_class
 ORDER BY passenger_class;
 ```
@@ -574,14 +574,13 @@ touch data/summary/.gitkeep
 ```text
 Kaggle
   └── ZIP
-      └── raw CSV
+      └── CSV
           ├── processed CSV
-          │   └── pipeline.titanic_passengers
+          │   └── Titanic-Dataset.csv
+          ├── processed CSV
+          │   └── titanic_processed.csv
           └── summary JSON
-              └── pipeline.dataset_summary
-
-Airflow run context
-  └── pipeline.etl_audit
+              └── dataset_summary.json
 ```
 
 # 17. Future enhancements
@@ -607,16 +606,16 @@ airflow version
 airflow standalone
 airflow dags list
 airflow dags list-import-errors
-airflow dags trigger kaggle_postgres_etl
-airflow dags list-runs --dag-id kaggle_postgres_etl
-airflow connections get pipeline_postgres
+airflow dags trigger titanic_data_pipeline
+airflow dags list-runs --dag-id titanic_data_pipeline
+airflow connections get titanic_data_pipeline
 python -m pytest -v
 psql -h localhost -U <dbuser> -d <dbname>
 ```
 
 # Learning outcome
 
-After completing this project, a developer should be able to explain:
+After completing this project, we should be able to explain:
 
 1. How Airflow models workflows as DAGs.
 2. How task dependencies determine execution order.
