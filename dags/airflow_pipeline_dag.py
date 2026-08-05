@@ -60,7 +60,8 @@ def airflow_pipeline() -> None:
 
     @task(task_id="generate_pipeline_run_id")
     def generate_pipeline_run_id() -> str:
-        return str(uuid.uuid4())
+        context = get_current_context()
+        return context["run_id"]
 
     @task(task_id="download_dataset")
     def download_dataset_task() -> str:
@@ -243,7 +244,5 @@ def airflow_pipeline() -> None:
     verification_task = verify_load_task(
         run_id=pipeline_run_id
     )
-
-
 
 airflow_pipeline()
