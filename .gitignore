@@ -63,3 +63,4 @@ dist/
 # Temporary files
 *.tmp
 *.temp
+airflow.db-wal
