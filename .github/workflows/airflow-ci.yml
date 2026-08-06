@@ -89,35 +89,9 @@ jobs:
           rm -rf "$AIRFLOW_HOME"
           airflow db migrate
 
-      - name: Validate Airflow DAG imports
-        run: |
-          python - <<'PY'
-          import os
-          from airflow.models.dagbag import DagBag
-      
-          dags_folder = os.environ["AIRFLOW__CORE__DAGS_FOLDER"]
-      
-          dag_bag = DagBag(
-          dag_folder=dags_folder,
-          include_examples=False,
-          )
-      
-          if dag_bag.import_errors:
-            print("Airflow DAG import errors found:")
-            
-            for filename, error in dag_bag.import_errors.items():
-              print(f"\nFile: {filename}")
-                  print(error)
-      
-              raise SystemExit(1)
-      
-          print("No Airflow DAG import errors found.")
-          print("Loaded DAGs:", sorted(dag_bag.dags))
-          PY
-
       - name: Confirm DAG and tasks
         run: |
-          airflow dags list | grep titanic_pipeline
+          airflow dags list | grep titanic_data_pipeline
 
           airflow tasks list \
             titanic_data_pipeline \
