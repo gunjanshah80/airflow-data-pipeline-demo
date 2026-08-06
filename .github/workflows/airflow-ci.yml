@@ -37,7 +37,7 @@ jobs:
 
       - name: Test Airflow DAG import
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/dags
         run: |
           python - <<'PY'
           import importlib.util
