@@ -4,58 +4,199 @@ on:
   push:
     branches:
       - main
-      - master
+
   pull_request:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
-  test-and-dag-check:
+  test-airflow-pipeline:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: airflow_pipeline_demo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d airflow_pipeline_demo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     env:
-      PYTHONPATH: ${{ github.workspace }}
-      AIRFLOW_HOME: ${{ github.workspace }}/.airflow
-      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW_HOME: /tmp/airflow-ci
+
       AIRFLOW__CORE__DAGS_FOLDER: ${{ github.workspace }}/dags
 
+      PYTHONPATH: >-
+        ${{ github.workspace }}:${{ github.workspace }}/dags
+
+      AIRFLOW_CONN_AIRFLOW_PIPELINE_POSTGRES: >-
+        postgresql://postgres:postgres@127.0.0.1:5432/airflow_pipeline_demo
+
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+
+      PROJECT_ROOT: ${{ github.workspace }}
+
+      KAGGLE_DATASET_SLUG: yasserh/titanic-dataset
+      SOURCE_CSV_NAME: Titanic-Dataset.csv
+
     steps:
-      - name: Check out repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: "3.12"
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install project dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
+          python -m pip install -e .
 
-      - name: Run unit tests first
+      - name: Verify PostgreSQL
         run: |
-          python -m pytest tests/test_pipeline_scripts.py -q
+          pg_isready \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U postgres \
+            -d airflow_pipeline_demo
 
-      - name: Test Airflow DAG import
-        env:
-          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/dags
+      - name: Prepare pipeline directories
         run: |
+          mkdir -p \
+            data/downloads \
+            data/raw \
+            data/processed \
+            data/summary
+
+      - name: Initialize Airflow metadata database
+        run: |
+          rm -rf "$AIRFLOW_HOME"
+          airflow db migrate
+
+      - name: Validate Airflow DAG imports
+        run: |
+          airflow dags list-import-errors \
+            --output=json |
+            tee /tmp/import-errors.json
+
           python - <<'PY'
-          import importlib.util
-          import os
+          import json
+          from pathlib import Path
 
-          dag_path = os.path.join(
-              os.getcwd(),
-              "dags",
-              "airflow_pipeline_dag.py"
+          errors = json.loads(
+              Path("/tmp/import-errors.json").read_text()
           )
 
-          spec = importlib.util.spec_from_file_location(
-              "airflow_pipeline_dag",
-              dag_path
-          )
+          if errors:
+              raise SystemExit(
+                  f"Airflow DAG import errors found: {errors}"
+              )
 
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-
-          print("Airflow DAG file imported successfully")
+          print("No Airflow DAG import errors found")
           PY
+
+      - name: Confirm DAG and tasks
+        run: |
+          airflow dags list | grep titanic_pipeline
+
+          airflow tasks list \
+            titanic_pipeline \
+            --tree
+
+      - name: Test Kaggle authentication
+        run: |
+          kaggle datasets files \
+            yasserh/titanic-dataset
+
+      - name: Run complete Airflow DAG
+        run: |
+          airflow dags test \
+            titanic_pipeline \
+            2026-08-06
+
+      - name: Verify generated files
+        run: |
+          find data -maxdepth 2 -type f -print
+
+          test -f data/raw/Titanic-Dataset.csv
+          test -f data/processed/titanic_processed.csv
+          test -f data/summary/dataset_summary.json
+
+      - name: Verify PostgreSQL tables
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U postgres \
+            -d airflow_pipeline_demo \
+            -c "\dt airflow_pipeline_demo.*"
+
+      - name: Verify loaded passenger records
+        env:
+          PGPASSWORD: postgres
+        run: |
+          ROW_COUNT=$(psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U postgres \
+            -d airflow_pipeline_demo \
+            -tAc "
+              SELECT COUNT(*)
+              FROM airflow_pipeline_demo.titanic_passengers;
+            ")
+
+          echo "Passenger rows loaded: $ROW_COUNT"
+
+          if [ "$ROW_COUNT" -le 0 ]; then
+            echo "No passenger records were loaded"
+            exit 1
+          fi
+
+      - name: Verify summary record
+        env:
+          PGPASSWORD: postgres
+        run: |
+          SUMMARY_COUNT=$(psql \
+            -h 127.0.0.1 \
+            -p 5432 \
+            -U postgres \
+            -d airflow_pipeline_demo \
+            -tAc "
+              SELECT COUNT(*)
+              FROM airflow_pipeline_demo.dataset_summary;
+            ")
+
+          echo "Summary records loaded: $SUMMARY_COUNT"
+
+          if [ "$SUMMARY_COUNT" -le 0 ]; then
+            echo "No summary record was loaded"
+            exit 1
+          fi
+
+      - name: Upload pipeline outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: airflow-pipeline-output
+          path: |
+            data/processed/
+            data/summary/
+          if-no-files-found: warn
