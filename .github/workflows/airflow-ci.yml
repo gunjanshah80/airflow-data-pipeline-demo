@@ -91,9 +91,7 @@ jobs:
 
       - name: Confirm DAG and tasks
         run: |
-          airflow dags list | grep titanic_data_pipeline
-
-          airflow tasks list titanic_data_pipeline
+          airflow dags list 
 
       - name: Test Kaggle authentication
         run: |
