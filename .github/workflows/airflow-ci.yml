@@ -93,9 +93,7 @@ jobs:
         run: |
           airflow dags list | grep titanic_data_pipeline
 
-          airflow tasks list \
-            titanic_data_pipeline \
-            --tree
+          airflow tasks list titanic_data_pipeline
 
       - name: Test Kaggle authentication
         run: |
