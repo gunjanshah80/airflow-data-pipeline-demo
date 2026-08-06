@@ -91,24 +91,28 @@ jobs:
 
       - name: Validate Airflow DAG imports
         run: |
-          airflow dags list-import-errors \
-            --output=json |
-            tee /tmp/import-errors.json
-
           python - <<'PY'
-          import json
-          from pathlib import Path
-
-          errors = json.loads(
-              Path("/tmp/import-errors.json").read_text()
+          import os
+          from airflow.models.dagbag import DagBag
+      
+          dags_folder = os.environ["AIRFLOW__CORE__DAGS_FOLDER"]
+      
+          dag_bag = DagBag(
+          dag_folder=dags_folder,
+          include_examples=False,
           )
-
-          if errors:
-              raise SystemExit(
-                  f"Airflow DAG import errors found: {errors}"
-              )
-
-          print("No Airflow DAG import errors found")
+      
+          if dag_bag.import_errors:
+            print("Airflow DAG import errors found:")
+            
+            for filename, error in dag_bag.import_errors.items():
+              print(f"\nFile: {filename}")
+                  print(error)
+      
+              raise SystemExit(1)
+      
+          print("No Airflow DAG import errors found.")
+          print("Loaded DAGs:", sorted(dag_bag.dags))
           PY
 
       - name: Confirm DAG and tasks
@@ -116,7 +120,7 @@ jobs:
           airflow dags list | grep titanic_pipeline
 
           airflow tasks list \
-            titanic_pipeline \
+            titanic_data_pipeline \
             --tree
 
       - name: Test Kaggle authentication
@@ -127,7 +131,7 @@ jobs:
       - name: Run complete Airflow DAG
         run: |
           airflow dags test \
-            titanic_pipeline \
+            titanic_data_pipeline \
             2026-08-06
 
       - name: Verify generated files
